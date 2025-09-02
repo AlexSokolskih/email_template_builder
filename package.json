@@ -1,0 +1,38 @@
+{
+  "name": "email-generator-backend",
+  "version": "1.0.0",
+  "description": "Backend для генератора email с Express и Prisma",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "multer": "^2.0.2",
+    "prisma": "^5.7.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "keywords": [
+    "express",
+    "prisma",
+    "postgresql",
+    "email-generator"
+  ],
+  "author": "",
+  "license": "MIT"
+}
