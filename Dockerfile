@@ -15,8 +15,10 @@ RUN npm ci --only=production
 # Генерация Prisma клиента
 RUN npx prisma generate
 
-# Копирование исходного кода
-COPY . .
+# Копирование исходного кода (кроме src, которая будет в volume)
+COPY package*.json ./
+COPY prisma ./prisma/
+COPY frontend ./frontend/
 
 # Создание пользователя для безопасности
 RUN addgroup -g 1001 -S nodejs

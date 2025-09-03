@@ -73,6 +73,59 @@ const upload = multer({
 });
 
 
+// Эндпоинт для отображения файлов (не для скачивания)
+app.get('/api/assets/:folder/:filename', (req, res) => {
+  try {
+    const { folder, filename } = req.params;
+    const filePath = path.join(__dirname, '../uploads', folder, filename);
+    
+    // Проверяем существование файла
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Файл не найден' });
+    }
+    
+    // Проверяем, что это файл, а не директория
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      return res.status(400).json({ error: 'Указанный путь не является файлом' });
+    }
+    
+    // Определяем MIME-тип на основе расширения файла
+    const ext = path.extname(filename).toLowerCase();
+    const mimeTypes = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+      '.pdf': 'application/pdf',
+      '.txt': 'text/plain',
+      '.html': 'text/html',
+      '.css': 'text/css',
+      '.js': 'application/javascript',
+      '.json': 'application/json',
+      '.xml': 'application/xml',
+      '.mp4': 'video/mp4',
+      '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav'
+    };
+    
+    const mimeType = mimeTypes[ext] || 'application/octet-stream';
+    
+    // Устанавливаем заголовки для отображения в браузере
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Кеширование на 1 час
+    
+    // Отправляем файл
+    res.sendFile(filePath);
+    
+  } catch (error) {
+    console.error('Ошибка получения файла:', error);
+    res.status(500).json({ error: 'Ошибка получения файла' });
+  }
+});
+
 // Эндпоинт для загрузки ассетов
 app.post('/api/upload/:userFolder', upload.single('file'), (req, res) => {
   try {
@@ -80,10 +133,34 @@ app.post('/api/upload/:userFolder', upload.single('file'), (req, res) => {
       return res.status(400).json({ error: 'Файл не загружен' });
     }
     
+    const userFolder = req.params.userFolder;
+    const uploadPath = path.join(__dirname, '../uploads', userFolder);
+    
+    // Получаем список файлов в папке пользователя
+    let files = [];
+    if (fs.existsSync(uploadPath)) {
+      files = fs.readdirSync(uploadPath).map(filename => {
+        const filePath = path.join(uploadPath, filename);
+        const stats = fs.statSync(filePath);
+        return {
+          name: filename,
+          size: stats.size,
+          created: stats.birthtime,
+          modified: stats.mtime
+        };
+      });
+    }
+    
+    console.log(`🔥 HOT RELOAD: Файл ${req.file.originalname} загружен в папку ${userFolder}`);
+    
     res.json({ 
       success: true, 
-      filename: req.file.filename,
-      path: req.file.path
+      folder: userFolder,
+      uploadedFile: {
+        filename: req.file.originalname,
+        path: req.file.path
+      },
+      files: files
     });
   } catch (error) {
     console.error('Ошибка загрузки файла:', error);
