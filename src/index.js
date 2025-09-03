@@ -18,14 +18,27 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https:", "https://cdn.jsdelivr.net"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net"],
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: ["'self'", "data:", "https:", "http:"],
       fontSrc: ["'self'", "https:", "data:", "https://cdn.jsdelivr.net"],
-      connectSrc: ["'self'"],
-      frameSrc: ["'self'"]
+      connectSrc: ["'self'", "http:", "https:"],
+      frameSrc: ["'self'", "http://localhost:3000", "http://localhost:3001"]
     }
-  }
+  },
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  frameguard: false // Отключаем X-Frame-Options полностью
 }));
+// Настройка CORS для всех эндпоинтов
 app.use(cors());
+
+// Специальная настройка CORS для эндпоинта /api/assets
+app.use('/api/assets', cors({
+  origin: '*', // Разрешаем все домены
+  credentials: false, // Отключаем credentials для wildcard origin
+  methods: ['GET', 'HEAD', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control'],
+  exposedHeaders: ['Content-Type', 'Content-Length', 'Last-Modified', 'ETag']
+}));
+
 app.use(morgan('combined'));
 app.use(express.json());
 
@@ -116,6 +129,9 @@ app.get('/api/assets/:folder/:filename', (req, res) => {
     // Устанавливаем заголовки для отображения в браузере
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Cache-Control', 'public, max-age=3600'); // Кеширование на 1 час
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); // Разрешаем cross-origin доступ
+    res.removeHeader('X-Frame-Options'); // Убираем блокировку iframe
+    res.setHeader('X-Frame-Options', 'ALLOWALL'); // Разрешаем iframe для всех доменов
     
     // Отправляем файл
     res.sendFile(filePath);
