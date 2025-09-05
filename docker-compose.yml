@@ -14,6 +14,7 @@ services:
       - ./frontend:/app/frontend
       - ./uploads:/app/uploads
       - ./src:/app/src
+      - /opt/email-generator:/opt/email-generator
     restart: unless-stopped
     user: "1001:1001"
 

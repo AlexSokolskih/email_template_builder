@@ -9,6 +9,10 @@ RUN apk add --no-cache openssl
 COPY package*.json ./
 COPY prisma ./prisma/
 
+# Создание пользователя для безопасности
+RUN addgroup -g 1001 -S appuser
+RUN adduser -S appuser -u 1001
+
 # Установка зависимостей
 RUN npm ci --only=production
 
@@ -20,14 +24,13 @@ COPY package*.json ./
 COPY prisma ./prisma/
 COPY frontend ./frontend/
 
-# Создание пользователя для безопасности
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
-
 # Создание папки uploads с правильными правами
-RUN mkdir -p /app/uploads && chown -R nodejs:nodejs /app/uploads
+RUN mkdir -p /app/uploads && chown -R appuser:appuser /app/uploads
 
-USER nodejs
+# Установка правильных прав на node_modules
+RUN chown -R appuser:appuser /app/node_modules
+
+USER appuser
 
 EXPOSE 3000
 
