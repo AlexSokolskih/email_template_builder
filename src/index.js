@@ -9,10 +9,12 @@ const multer = require('multer');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const https = require('https');
 
 const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // Middleware для проверки JWT токена
@@ -43,14 +45,24 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "https:", "http:"],
       fontSrc: ["'self'", "https:", "data:", "https://cdn.jsdelivr.net"],
       connectSrc: ["'self'", "http:", "https:"],
-      frameSrc: ["'self'", "http://localhost:3000", "http://localhost:3001"]
+      frameSrc: ["'self'", "http://localhost:3000", "http://localhost:3001", "http://62.182.192.42:3001", "https://localhost:3000", "https://localhost:3001", "https://62.182.192.42:3001"]
     }
   },
   crossOriginResourcePolicy: { policy: "cross-origin" },
   frameguard: false // Отключаем X-Frame-Options полностью
 }));
 // Настройка CORS для всех эндпоинтов
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3000', 
+    'http://localhost:3001', 
+    'http://62.182.192.42:3001',
+    'https://62.182.192.42:3001',
+    'https://localhost:3000',
+    'https://localhost:3001'
+  ],
+  credentials: true
+}));
 
 // Специальная настройка CORS для эндпоинта /api/assets
 app.use('/api/assets', cors({
@@ -407,14 +419,60 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Что-то пошло не так!' });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Сервер запущен на порту ${PORT}`);
-});
+// SSL сертификаты
+const SSL_KEY_PATH = process.env.SSL_KEY_PATH || './ssl/private.key';
+const SSL_CERT_PATH = process.env.SSL_CERT_PATH || './ssl/certificate.crt';
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM получен, закрываю соединения...');
-  await prisma.$disconnect();
-  process.exit(0);
-}); 
+// Функция для запуска сервера
+const startServer = () => {
+  try {
+    // Проверяем наличие SSL сертификатов
+    if (fs.existsSync(SSL_KEY_PATH) && fs.existsSync(SSL_CERT_PATH)) {
+      const privateKey = fs.readFileSync(SSL_KEY_PATH, 'utf8');
+      const certificate = fs.readFileSync(SSL_CERT_PATH, 'utf8');
+      
+      const credentials = {
+        key: privateKey,
+        cert: certificate
+      };
+      
+      // Запускаем HTTPS сервер
+      const httpsServer = https.createServer(credentials, app);
+      httpsServer.listen(HTTPS_PORT, () => {
+        console.log(`🔒 HTTPS сервер запущен на порту ${HTTPS_PORT}`);
+        console.log(`🌐 Доступен по адресу: https://62.182.192.42:${HTTPS_PORT}`);
+      });
+      
+      // Также запускаем HTTP сервер как fallback
+      app.listen(PORT, () => {
+        console.log(`🚀 HTTP сервер запущен на порту ${PORT}`);
+        console.log(`🌐 Доступен по адресу: http://62.182.192.42:${PORT}`);
+      });
+      
+      // Graceful shutdown для HTTPS
+      process.on('SIGTERM', async () => {
+        console.log('SIGTERM получен, закрываю соединения...');
+        httpsServer.close(async () => {
+          await prisma.$disconnect();
+          process.exit(0);
+        });
+      });
+      
+    } else {
+      console.warn('⚠️  SSL сертификаты не найдены, запускаю HTTP сервер');
+      console.warn(`   Ожидаемые пути: ${SSL_KEY_PATH}, ${SSL_CERT_PATH}`);
+      
+      // Запускаем HTTP сервер как fallback
+      app.listen(PORT, () => {
+        console.log(`🚀 HTTP сервер запущен на порту ${PORT}`);
+        console.log(`🌐 Доступен по адресу: http://62.182.192.42:${PORT}`);
+      });
+    }
+  } catch (error) {
+    console.error('❌ Ошибка запуска сервера:', error);
+    process.exit(1);
+  }
+};
+
+// Запускаем сервер
+startServer(); 

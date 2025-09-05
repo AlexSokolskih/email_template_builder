@@ -4,17 +4,19 @@ services:
   app:
     build: .
     ports:
-      - "3001:3000"
+      - "3001:3001"  # HTTPS порт
+      - "3000:3000"  # HTTP порт (fallback)
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/email_generator
+      - SSL_KEY_PATH=/app/ssl/private.key
+      - SSL_CERT_PATH=/app/ssl/certificate.crt
     depends_on:
       - postgres
     volumes:
       - ./frontend:/app/frontend
       - ./uploads:/app/uploads
       - ./src:/app/src
-      - /opt/email-generator:/opt/email-generator
     restart: unless-stopped
     user: "1001:1001"
 

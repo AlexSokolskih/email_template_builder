@@ -2,7 +2,7 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Установка зависимостей для Prisma
+# Установка зависимостей для Prisma и SSL
 RUN apk add --no-cache openssl
 
 # Копирование package файлов
@@ -24,14 +24,17 @@ COPY package*.json ./
 COPY prisma ./prisma/
 COPY frontend ./frontend/
 
-# Создание папки uploads с правильными правами
-RUN mkdir -p /app/uploads && chown -R appuser:appuser /app/uploads
+# Скрипт для запуска с SSL
+COPY scripts/start-with-ssl.sh /app/start-with-ssl.sh
 
-# Установка правильных прав на node_modules
-RUN chown -R appuser:appuser /app/node_modules
+# Создание папок с правильными правами
+RUN mkdir -p /app/uploads /app/ssl && chown -R appuser:appuser /app/uploads /app/ssl
+
+# Установка правильных прав на node_modules и скрипт
+RUN chown -R appuser:appuser /app/node_modules && chmod +x /app/start-with-ssl.sh && chown appuser:appuser /app/start-with-ssl.sh
 
 USER appuser
 
-EXPOSE 3000
+EXPOSE 3000 3001
 
-CMD ["npm", "start"] 
+CMD ["/app/start-with-ssl.sh"] 
