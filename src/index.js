@@ -17,17 +17,52 @@ const PORT = process.env.PORT || 3000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
+// Функция для создания стандартизированного JWT токена
+const createToken = (userId, email) => {
+  // Нормализуем email для консистентности
+  const normalizedEmail = email.toLowerCase().trim();
+  
+  return jwt.sign(
+    { 
+      userId, 
+      email: normalizedEmail,
+      iat: Math.floor(Date.now() / 1000) // Фиксируем время создания
+    },
+    JWT_SECRET,
+    { 
+      expiresIn: '24h',
+      algorithm: 'HS256' // Фиксируем алгоритм
+    }
+  );
+};
+
 // Middleware для проверки JWT токена
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Токен доступа не предоставлен' });
+  }
+
+  // Проверяем формат Bearer токена
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Неверный формат токена. Ожидается: Bearer <token>' });
+  }
+
+  const token = authHeader.substring(7); // Убираем "Bearer " (7 символов)
 
   if (!token) {
     return res.status(401).json({ error: 'Токен доступа не предоставлен' });
   }
 
+  // Дополнительная проверка на валидность токена
+  if (typeof token !== 'string' || token.trim() === '') {
+    return res.status(401).json({ error: 'Неверный формат токена' });
+  }
+
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
+      console.error('JWT verification error:', err.message);
       return res.status(403).json({ error: 'Недействительный токен' });
     }
     req.user = user;
@@ -56,12 +91,16 @@ app.use(cors({
   origin: [
     'http://localhost:3000', 
     'http://localhost:3001', 
+    'http://localhost:3005',
     'http://62.182.192.42:3001',
     'https://62.182.192.42:3001',
     'https://localhost:3000',
-    'https://localhost:3001'
+    'https://localhost:3001',
+    'https://localhost:3005'
   ],
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'X-Requested-With'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 
 // Специальная настройка CORS для эндпоинта /api/assets
@@ -75,6 +114,28 @@ app.use('/api/assets', cors({
 
 app.use(morgan('combined'));
 app.use(express.json());
+
+// Middleware для обработки OPTIONS запросов
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cache-Control, X-Requested-With');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.status(200).end();
+    return;
+  }
+  next();
+});
+
+// Middleware для нормализации заголовков
+app.use((req, res, next) => {
+  // Нормализуем заголовок Authorization
+  if (req.headers.authorization) {
+    req.headers.authorization = req.headers.authorization.trim();
+  }
+  next();
+});
 
 
 
@@ -137,11 +198,7 @@ app.post('/api/auth/register', async (req, res) => {
     });
 
     // Создаем JWT токен
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    const token = createToken(user.id, user.email);
 
     res.status(201).json({
       message: 'Пользователь успешно зарегистрирован',
@@ -196,11 +253,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // Создаем JWT токен
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    const token = createToken(user.id, user.email);
 
     res.json({
       message: 'Успешная авторизация',
@@ -249,6 +302,16 @@ app.use('/_next', express.static(path.join(__dirname, '../frontend/_next')));
 // Root route
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/index.html'));
+});
+
+// Auth route
+app.get('/auth/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/auth/index.html'));
+});
+
+// Register route
+app.get('/register/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/register/index.html'));
 });
 
 // Настройка multer для загрузки файлов
@@ -350,6 +413,7 @@ app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => 
     
     const userFolder = req.user.userId; // Используем ID пользователя из токена
     const uploadPath = path.join(__dirname, '../uploads', userFolder);
+    console.log('Upload path:', uploadPath);
     
     // Получаем список файлов в папке пользователя
     let files = [];

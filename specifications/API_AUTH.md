@@ -6,7 +6,20 @@
 
 ## Эндпоинты
 
-### 1. Регистрация
+### 1. Health Check
+**GET** `/health`
+
+Проверка состояния сервера.
+
+**Ответ:**
+```json
+{
+  "status": "OK",
+  "timestamp": "2024-01-01T00:00:00.000Z"
+}
+```
+
+### 2. Регистрация
 **POST** `/api/auth/register`
 
 Создает нового пользователя в системе.
@@ -19,6 +32,12 @@
   "name": "Имя пользователя" // опционально
 }
 ```
+
+**Валидация:**
+- Email и пароль обязательны
+- Пароль должен содержать минимум 6 символов
+- Email должен быть уникальным
+- Имя пользователя опционально
 
 **Ответ:**
 ```json
@@ -34,7 +53,7 @@
 }
 ```
 
-### 2. Авторизация
+### 3. Авторизация
 **POST** `/api/auth/login`
 
 Авторизует существующего пользователя.
@@ -46,6 +65,9 @@
   "password": "password123"
 }
 ```
+
+**Валидация:**
+- Email и пароль обязательны
 
 **Ответ:**
 ```json
@@ -61,7 +83,7 @@
 }
 ```
 
-### 3. Получение информации о пользователе
+### 4. Получение информации о пользователе
 **GET** `/api/auth/me`
 
 Возвращает информацию о текущем авторизованном пользователе.
@@ -74,6 +96,19 @@ Authorization: Bearer <token>
 **Ответ:**
 ```json
 {
+# Загрузка файла
+curl -X POST http://localhost:3000/api/upload \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -F "file=@/path/to/file.txt"
+
+# Получение списка файлов
+curl -X GET http://localhost:3000/api/files \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+
+# Получение файла
+curl -X GET http://localhost:3000/api/assets/user_id/filename.txt \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE"
+```
   "user": {
     "id": "user_id",
     "email": "user@example.com",
@@ -85,7 +120,7 @@ Authorization: Bearer <token>
 
 ## Защищенные эндпоинты
 
-### 4. Загрузка файлов
+### 5. Загрузка файлов
 **POST** `/api/upload`
 
 Загружает файл в папку пользователя.
@@ -100,6 +135,10 @@ Content-Type: multipart/form-data
 ```
 file: <файл>
 ```
+
+**Ограничения:**
+- Максимальный размер файла: 10MB
+- Поддерживаемые типы файлов: любые
 
 **Ответ:**
 ```json
@@ -121,7 +160,7 @@ file: <файл>
 }
 ```
 
-### 5. Получение списка файлов
+### 6. Получение списка файлов
 **GET** `/api/files`
 
 Возвращает список файлов пользователя.
@@ -146,7 +185,7 @@ Authorization: Bearer <token>
 }
 ```
 
-### 6. Получение файла
+### 7. Получение файла
 **GET** `/api/assets/:folder/:filename`
 
 Возвращает файл пользователя.
@@ -160,6 +199,18 @@ Authorization: Bearer <token>
 - `folder` - ID пользователя (должен совпадать с ID в токене)
 - `filename` - имя файла
 
+**Поддерживаемые типы файлов:**
+- Изображения: PNG, JPG, JPEG, GIF, WebP, SVG
+- Документы: PDF, TXT, HTML, CSS, JS, JSON, XML
+- Медиа: MP4, MP3, WAV
+- Остальные типы: application/octet-stream
+
+**Заголовки ответа:**
+- `Content-Type` - MIME-тип файла
+- `Cache-Control: public, max-age=3600` - кеширование на 1 час
+- `Cross-Origin-Resource-Policy: cross-origin` - разрешение cross-origin доступа
+- `X-Frame-Options: ALLOWALL` - разрешение встраивания в iframe
+
 ## Коды ошибок
 
 - `400` - Неверные данные запроса
@@ -167,6 +218,13 @@ Authorization: Bearer <token>
 - `403` - Доступ запрещен (попытка доступа к чужим файлам)
 - `404` - Ресурс не найден
 - `500` - Ошибка сервера
+
+**Детали ошибок:**
+- `400` - Email и пароль обязательны, пароль менее 6 символов, пользователь уже существует
+- `401` - Токен не предоставлен, неверный формат токена, недействительный токен, неверный email или пароль
+- `403` - Недействительный токен, доступ к чужим файлам запрещен
+- `404` - Пользователь не найден, файл не найден
+- `500` - Ошибка базы данных, ошибка сервера
 
 ## Примеры использования
 
@@ -194,27 +252,31 @@ const meResponse = await fetch('/api/auth/me', {
 ### cURL
 ```bash
 # Регистрация
-curl -X POST http://localhost:3001/api/auth/register \
+curl -X POST http://localhost:3000/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"user@example.com","password":"password123","name":"Имя пользователя"}'
 
 # Авторизация
-curl -X POST http://localhost:3001/api/auth/login \
+curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"user@example.com","password":"password123"}'
 
 # Получение информации о пользователе
-curl -X GET http://localhost:3001/api/auth/me \
+curl -X GET http://localhost:3000/api/auth/me \
   -H "Authorization: Bearer YOUR_TOKEN_HERE"
-```
+
 
 ## Безопасность
 
-1. **Пароли** хешируются с помощью bcrypt
+1. **Пароли** хешируются с помощью bcrypt (10 раундов)
 2. **JWT токены** имеют срок действия 24 часа
-3. **Файлы** изолированы по пользователям
+3. **Файлы** изолированы по пользователям (проверка userId в токене)
 4. **CORS** настроен для безопасного взаимодействия
 5. **Helmet** обеспечивает базовую безопасность HTTP заголовков
+6. **Валидация токенов** - проверка формата Bearer и валидности JWT
+7. **Изоляция файлов** - пользователи могут получать доступ только к своим файлам
+8. **Лимиты загрузки** - максимальный размер файла 10MB
+9. **SSL поддержка** - автоматический запуск HTTPS при наличии сертификатов
 
 ## Настройка
 
@@ -223,4 +285,20 @@ curl -X GET http://localhost:3001/api/auth/me \
 DATABASE_URL="postgresql://user:password@localhost:5432/database"
 JWT_SECRET="your-secret-key"
 PORT=3000
+HTTPS_PORT=3001
 ```
+
+**Порты:**
+- HTTP сервер: 3000
+- HTTPS сервер: 3001 (если SSL сертификаты настроены)
+
+**CORS настройки:**
+- Разрешенные домены: localhost:3000, localhost:3001, localhost:3005, 62.182.192.42:3001
+- Поддержка HTTPS и HTTP
+- Credentials: true для основных эндпоинтов
+- Специальная настройка для `/api/assets` - разрешен доступ с любых доменов
+
+**SSL сертификаты:**
+- Путь к приватному ключу: `./ssl/private.key`
+- Путь к сертификату: `./ssl/certificate.crt`
+- Автоматический запуск HTTPS при наличии сертификатов

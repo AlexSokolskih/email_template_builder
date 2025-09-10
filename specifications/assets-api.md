@@ -2,7 +2,8 @@
 
 ## Базовый URL
 ```
-http://localhost:3001
+http://localhost:3000
+https://localhost:3001
 ```
 
 ## Эндпоинт
@@ -13,9 +14,38 @@ http://localhost:3001
 
 Возвращает файл для отображения в браузере (не для скачивания).
 
+**⚠️ ТРЕБУЕТ АУТЕНТИФИКАЦИИ** - необходимо передать JWT токен в заголовке `Authorization: Bearer <token>`
+
 #### Параметры URL
-- `folder` (string, обязательный) - имя папки, в которой находится файл
+- `folder` (string, обязательный) - ID пользователя (папка пользователя)
 - `filename` (string, обязательный) - имя файла с расширением
+
+#### Заголовки запроса
+- `Authorization: Bearer <jwt_token>` (обязательный) - JWT токен для аутентификации
+
+#### Получение JWT токена
+Для получения JWT токена используйте эндпоинты аутентификации:
+
+**Регистрация:**
+```bash
+POST /api/auth/register
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "name": "Имя пользователя"
+}
+```
+
+**Авторизация:**
+```bash
+POST /api/auth/login
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+Ответ содержит JWT токен в поле `token`, который нужно использовать в заголовке Authorization.
 
 #### Поддерживаемые типы файлов
 - **Изображения**: PNG, JPG, JPEG, GIF, WebP, SVG
@@ -25,14 +55,35 @@ http://localhost:3001
 #### Заголовки ответа
 - `Content-Type` - автоматически определяется по расширению файла
 - `Cache-Control: public, max-age=3600` - кеширование на 1 час
-- `Access-Control-Allow-Origin: *` - разрешенные источники для CORS (все домены)
 - `Cross-Origin-Resource-Policy: cross-origin` - разрешение cross-origin доступа
+- `X-Frame-Options: ALLOWALL` - разрешение встраивания в iframe
+- `Access-Control-Allow-Origin: *` - разрешенные источники для CORS (все домены)
 - `Access-Control-Expose-Headers` - доступные заголовки для клиента
 
 #### Успешный ответ (200)
 Возвращает содержимое файла с соответствующим MIME-типом для отображения в браузере.
 
 #### Ошибки
+
+**401 Unauthorized** - Токен не предоставлен или неверный формат
+```json
+{
+  "error": "Токен доступа не предоставлен"
+}
+```
+
+**403 Forbidden** - Недействительный токен или доступ запрещен
+```json
+{
+  "error": "Недействительный токен"
+}
+```
+или
+```json
+{
+  "error": "Доступ запрещен"
+}
+```
 
 **404 Not Found** - Файл не найден
 ```json
@@ -57,32 +108,37 @@ http://localhost:3001
 
 #### Примеры использования
 
-**Прямая ссылка в HTML:**
-```html
-<!-- Изображение -->
-<img src="/api/assets/email-assets/logo.png" alt="Логотип" />
-
-<!-- PDF документ -->
-<iframe src="/api/assets/documents/report.pdf" width="100%" height="600px"></iframe>
-
-<!-- Видео -->
-<video controls>
-  <source src="/api/assets/videos/demo.mp4" type="video/mp4">
-</video>
-```
-
-**JavaScript (fetch):**
+**JavaScript (fetch с аутентификацией):**
 ```javascript
 // Получение изображения
-fetch('/api/assets/email-assets/logo.png')
-  .then(response => response.blob())
+const token = 'your-jwt-token-here';
+const userId = 'user-id-here';
+
+fetch(`/api/assets/${userId}/logo.png`, {
+  headers: {
+    'Authorization': `Bearer ${token}`
+  }
+})
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.blob();
+  })
   .then(blob => {
     const imageUrl = URL.createObjectURL(blob);
     document.getElementById('logo').src = imageUrl;
+  })
+  .catch(error => {
+    console.error('Ошибка загрузки файла:', error);
   });
 
 // Получение текстового файла
-fetch('/api/assets/testuser/readme.txt')
+fetch(`/api/assets/${userId}/readme.txt`, {
+  headers: {
+    'Authorization': `Bearer ${token}`
+  }
+})
   .then(response => response.text())
   .then(text => {
     console.log('Содержимое файла:', text);
@@ -92,17 +148,21 @@ fetch('/api/assets/testuser/readme.txt')
 **cURL:**
 ```bash
 # Получение изображения
-curl -o logo.png http://localhost:3001/api/assets/email-assets/logo.png
+curl -H "Authorization: Bearer your-jwt-token" \
+     -o logo.png \
+     http://localhost:3000/api/assets/user-id/logo.png
 
 # Получение PDF
-curl -o document.pdf http://localhost:3001/api/assets/documents/report.pdf
+curl -H "Authorization: Bearer your-jwt-token" \
+     -o document.pdf \
+     http://localhost:3000/api/assets/user-id/report.pdf
 ```
 
 **React компонент:**
 ```jsx
 import React, { useState, useEffect } from 'react';
 
-const AssetDisplay = ({ folder, filename }) => {
+const AssetDisplay = ({ userId, filename, token }) => {
   const [assetUrl, setAssetUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -111,9 +171,20 @@ const AssetDisplay = ({ folder, filename }) => {
     const fetchAsset = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/assets/${folder}/${filename}`);
+        const response = await fetch(`/api/assets/${userId}/${filename}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         
         if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error('Необходима авторизация');
+          } else if (response.status === 403) {
+            throw new Error('Доступ запрещен');
+          } else if (response.status === 404) {
+            throw new Error('Файл не найден');
+          }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
@@ -128,7 +199,9 @@ const AssetDisplay = ({ folder, filename }) => {
       }
     };
 
-    fetchAsset();
+    if (token && userId && filename) {
+      fetchAsset();
+    }
     
     // Cleanup
     return () => {
@@ -136,7 +209,7 @@ const AssetDisplay = ({ folder, filename }) => {
         URL.revokeObjectURL(assetUrl);
       }
     };
-  }, [folder, filename]);
+  }, [userId, filename, token]);
 
   if (loading) return <div>Загрузка...</div>;
   if (error) return <div>Ошибка: {error}</div>;
@@ -196,19 +269,21 @@ export default AssetDisplay;
 
 ## Структура файловой системы
 
-Файлы доступны по следующей структуре:
+Файлы доступны по следующей структуре, где каждая папка соответствует ID пользователя:
 ```
 uploads/
-├── email-assets/
+├── user-id-1/
 │   ├── logo.png
-│   ├── btn.png
-│   └── arrow.png
-├── testuser/
 │   ├── document.pdf
 │   └── readme.txt
-└── documents/
+├── user-id-2/
+│   ├── image.jpg
+│   └── video.mp4
+└── user-id-3/
     └── report.pdf
 ```
+
+**Важно:** Пользователи могут получить доступ только к файлам в своей папке (соответствующей их user ID).
 
 ## MIME-типы
 
@@ -232,12 +307,15 @@ uploads/
 
 ## Безопасность
 
+- **JWT аутентификация** - обязательная авторизация для доступа к файлам
+- **Изоляция пользователей** - пользователи могут получить доступ только к своим файлам
 - Проверка существования файла
 - Валидация, что путь указывает на файл, а не директорию
 - Автоматическое определение MIME-типа
 - Кеширование для оптимизации производительности
 - CORS настроен для всех доменов (`*`)
 - Cross-Origin-Resource-Policy: cross-origin
+- Разрешение встраивания в iframe (X-Frame-Options: ALLOWALL)
 
 ## CORS настройки
 
@@ -252,18 +330,24 @@ uploads/
 
 ## Рекомендации по использованию
 
-1. **Кеширование**: Файлы кешируются на 1 час, используйте это для оптимизации
-2. **Обработка ошибок**: Всегда проверяйте статус ответа
-3. **Освобождение ресурсов**: Используйте `URL.revokeObjectURL()` для освобождения памяти
-4. **Типы файлов**: Проверяйте расширение файла для правильного отображения
-5. **Размеры**: Устанавливайте максимальные размеры для изображений и видео
-6. **CORS**: Настроен для всех доменов, работает с любым фронтендом
+1. **Аутентификация**: Всегда передавайте JWT токен в заголовке Authorization
+2. **Проверка доступа**: Убедитесь, что пользователь запрашивает файлы только из своей папки
+3. **Кеширование**: Файлы кешируются на 1 час, используйте это для оптимизации
+4. **Обработка ошибок**: Всегда проверяйте статус ответа и обрабатывайте ошибки аутентификации
+5. **Освобождение ресурсов**: Используйте `URL.revokeObjectURL()` для освобождения памяти
+6. **Типы файлов**: Проверяйте расширение файла для правильного отображения
+7. **Размеры**: Устанавливайте максимальные размеры для изображений и видео
+8. **CORS**: Настроен для всех доменов, работает с любым фронтендом
+9. **Iframe**: Файлы можно встраивать в iframe благодаря настроенным заголовкам
 
 ## Возможные улучшения
 
 1. Добавить поддержку дополнительных MIME-типов
 2. Реализовать кеширование с ETag заголовками
-3. Добавить ограничения доступа к файлам
+3. Добавить роли и права доступа к файлам
 4. Реализовать сжатие изображений на лету
 5. Добавить поддержку WebP конвертации
 6. Реализовать lazy loading для больших файлов
+7. Добавить логирование доступа к файлам
+8. Реализовать временные ссылки для файлов
+9. Добавить валидацию размера файлов при загрузке
