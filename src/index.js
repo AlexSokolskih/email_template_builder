@@ -38,19 +38,21 @@ const createToken = (userId, email) => {
 
 // Middleware для проверки JWT токена
 const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  
-  if (!authHeader) {
-    return res.status(401).json({ error: 'Токен доступа не предоставлен' });
+  const authHeader = req.headers['authorization'] ? req.headers['authorization'].trim() : undefined;
+
+  let token = undefined;
+
+  // 1) Пытаемся взять из Authorization: Bearer <token>
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
   }
 
-  // Проверяем формат Bearer токена
-  if (!authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Неверный формат токена. Ожидается: Bearer <token>' });
+  // 2) Если нет корректного Bearer, пробуем query-параметр ?token=
+  if (!token && req.query && typeof req.query.token === 'string') {
+    token = req.query.token.trim();
   }
 
-  const token = authHeader.substring(7); // Убираем "Bearer " (7 символов)
-
+  // 3) Если так и не нашли токен — выдаем ошибку
   if (!token) {
     return res.status(401).json({ error: 'Токен доступа не предоставлен' });
   }
@@ -404,47 +406,55 @@ app.get('/api/assets/:folder/:filename', authenticateToken, (req, res) => {
   }
 });
 
-// Эндпоинт для загрузки ассетов
-app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Файл не загружен' });
-    }
-    
-    const userFolder = req.user.userId; // Используем ID пользователя из токена
-    const uploadPath = path.join(__dirname, '../uploads', userFolder);
-    console.log('Upload path:', uploadPath);
-    
-    // Получаем список файлов в папке пользователя
-    let files = [];
-    if (fs.existsSync(uploadPath)) {
-      files = fs.readdirSync(uploadPath).map(filename => {
-        const filePath = path.join(uploadPath, filename);
-        const stats = fs.statSync(filePath);
-        return {
-          name: filename,
-          size: stats.size,
-          created: stats.birthtime,
-          modified: stats.mtime
-        };
+// Эндпоинт для загрузки ассетов (принимает любой field в multipart)
+app.post('/api/upload', authenticateToken, (req, res) => {
+  upload.any()(req, res, (err) => {
+    try {
+      if (err) {
+        console.error('Ошибка multer при загрузке:', err);
+        return res.status(400).json({ error: 'Ошибка загрузки файла' });
+      }
+
+      const uploaded = Array.isArray(req.files) && req.files.length > 0 ? req.files[0] : null;
+      if (!uploaded) {
+        return res.status(400).json({ error: 'Файл не загружен' });
+      }
+
+      const userFolder = req.user.userId; // Используем ID пользователя из токена
+      const uploadPath = path.join(__dirname, '../uploads', userFolder);
+      console.log('Upload path:', uploadPath);
+
+      // Получаем список файлов в папке пользователя
+      let files = [];
+      if (fs.existsSync(uploadPath)) {
+        files = fs.readdirSync(uploadPath).map(filename => {
+          const filePath = path.join(uploadPath, filename);
+          const stats = fs.statSync(filePath);
+          return {
+            name: filename,
+            size: stats.size,
+            created: stats.birthtime,
+            modified: stats.mtime
+          };
+        });
+      }
+
+      console.log(`🔥 HOT RELOAD: Файл ${uploaded.originalname} загружен в папку ${userFolder}`);
+
+      res.json({ 
+        success: true, 
+        folder: userFolder,
+        uploadedFile: {
+          filename: uploaded.originalname,
+          path: uploaded.path
+        },
+        files: files
       });
+    } catch (error) {
+      console.error('Ошибка загрузки файла:', error);
+      res.status(500).json({ error: 'Ошибка загрузки файла' });
     }
-    
-    console.log(`🔥 HOT RELOAD: Файл ${req.file.originalname} загружен в папку ${userFolder}`);
-    
-    res.json({ 
-      success: true, 
-      folder: userFolder,
-      uploadedFile: {
-        filename: req.file.originalname,
-        path: req.file.path
-      },
-      files: files
-    });
-  } catch (error) {
-    console.error('Ошибка загрузки файла:', error);
-    res.status(500).json({ error: 'Ошибка загрузки файла' });
-  }
+  });
 });
 
 // Эндпоинт для получения списка файлов пользователя
