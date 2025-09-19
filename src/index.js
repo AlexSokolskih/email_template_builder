@@ -519,18 +519,10 @@ app.post('/api/sendMessageWithFile', authenticateToken, async (req, res) => {
 
     let result;
 
-    // Если есть файл, отправляем с файлом, иначе просто текстовое сообщение
-    if (file) {
-      console.log('🔥 HOT RELOAD: Отправляем сообщение с файлом в Gemini');
-      result = await gemini.sendMessageWithFile(combinedMessage, file, {
-        userId: req.user.userId
-      });
-    } else {
       console.log('🔥 HOT RELOAD: Отправляем текстовое сообщение в Gemini');
       result = await gemini.sendMessage(combinedMessage, {
         userId: req.user.userId
       });
-    }
 
     if (result.success) {
       console.log('🔥 HOT RELOAD: Успешный ответ от Gemini');
