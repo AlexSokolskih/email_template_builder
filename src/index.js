@@ -10,6 +10,7 @@ const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const https = require('https');
+const GeminiClient = require('../services/ai/gemini/GeminiClient');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -487,6 +488,83 @@ app.get('/api/files', authenticateToken, (req, res) => {
 
 
 
+// Эндпоинт для отправки сообщения с HTML файлом в Gemini
+app.post('/api/sendMessageWithFile', authenticateToken, async (req, res) => {
+  console.log('🔥 HOT RELOAD: Пришел запрос на отправку сообщения с файлом');
+  console.log('🔥 HOT RELOAD: Тело запроса:', req.body);  
+
+  try {
+    const { message, emailHTML } = req.body || {};
+
+    console.log('🔥 HOT RELOAD: Сообщение:', req.body.message);
+    console.log('🔥 HOT RELOAD: Email HTML:', req.body.emailHTML);
+
+    if (typeof message !== 'string' || message.trim() === '') {
+      return res.status(400).json({ error: 'message обязателен и должен быть строкой' });
+    }
+    if (typeof emailHTML !== 'string' || emailHTML.trim() === '') {
+      return res.status(400).json({ error: 'emailHTML обязателен и должен быть строкой' });
+    }
+
+    // Проверяем наличие API ключа Gemini
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY не настроен' });
+    }
+
+    // Создаем экземпляр GeminiClient
+    const gemini = new GeminiClient(process.env.GEMINI_API_KEY);
+
+    // Склеиваем сообщение и HTML тело письма
+    const combinedMessage = `${message}\n\nHTML тело письма:\n${emailHTML}`;
+
+    let result;
+
+    // Если есть файл, отправляем с файлом, иначе просто текстовое сообщение
+    if (file) {
+      console.log('🔥 HOT RELOAD: Отправляем сообщение с файлом в Gemini');
+      result = await gemini.sendMessageWithFile(combinedMessage, file, {
+        userId: req.user.userId
+      });
+    } else {
+      console.log('🔥 HOT RELOAD: Отправляем текстовое сообщение в Gemini');
+      result = await gemini.sendMessage(combinedMessage, {
+        userId: req.user.userId
+      });
+    }
+
+    if (result.success) {
+      console.log('🔥 HOT RELOAD: Успешный ответ от Gemini');
+      console.log('🔥 HOT RELOAD: Результат:', result);
+      return res.json({
+        success: true,
+        message: result.text,
+        emailHtml: result.emailHtml,
+        usage: result.usage,
+        model: result.model,
+        fileProcessed: result.fileProcessed || false,
+        filesProcessed: result.filesProcessed || 0
+      });
+    } else {
+      console.error('🔥 HOT RELOAD: Ошибка от Gemini:', result.error);
+      return res.status(500).json({
+        success: false,
+        error: result.error,
+        details: result.details
+      });
+    }
+
+  } catch (error) {
+    console.error('Ошибка при отправке сообщения с файлом:', error);
+    res.status(500).json({ success: false, error: 'Ошибка при отправке сообщения с файлом' });
+  }
+});
+
+
+
+
+
+
+
 // Error handling
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -548,5 +626,10 @@ const startServer = () => {
   }
 };
 
-// Запускаем сервер
-startServer(); 
+// Экспортируем app для тестов
+module.exports = app;
+
+// Запускаем сервер только если файл запущен напрямую
+if (require.main === module) {
+  startServer();
+} 
