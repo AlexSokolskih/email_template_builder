@@ -6,13 +6,13 @@ services:
     ports:
       - "3001:3001"  # HTTPS порт
       - "3000:3000"  # HTTP порт (fallback)
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/email_generator
       - SSL_KEY_PATH=/app/ssl/private.key
       - SSL_CERT_PATH=/app/ssl/certificate.crt
-      - JWT_SECRET=your-secret-key-change-in-production
-      - GEMINI_API_KEY=your-gemini-api-key-here
     depends_on:
       - postgres
     volumes:
