@@ -14,8 +14,11 @@ https://localhost:3001
 
 Принимает JSON с сообщением и HTML-контентом email
 
-#### Тело запроса
+#### Заголовки запроса
 - Content-Type: `application/json`
+- Authorization: `Bearer <JWT_TOKEN>` (обязательно)
+
+#### Тело запроса
 - Формат: JSON объект
 
 ```json
@@ -53,6 +56,20 @@ https://localhost:3001
 
 #### Ошибки
 
+**401 Unauthorized - Отсутствует токен авторизации**
+```json
+{
+  "error": "Токен доступа не предоставлен"
+}
+```
+
+**403 Forbidden - Недействительный токен**
+```json
+{
+  "error": "Недействительный токен"
+}
+```
+
 **400 Bad Request - Неверные параметры**
 ```json
 {
@@ -80,6 +97,7 @@ https://localhost:3001
 ```bash
 curl -X POST http://localhost:3000/api/sendMessageWithFile \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -d '{
     "message": "Привет! Это тестовое сообщение.",
     "emailHTML": "<html><body><h1>Заголовок</h1><p>Содержимое email</p></body></html>"
@@ -88,10 +106,13 @@ curl -X POST http://localhost:3000/api/sendMessageWithFile \
 
 ### JavaScript (fetch)
 ```javascript
+const token = localStorage.getItem('token'); // Получаем токен из localStorage
+
 const response = await fetch('http://localhost:3000/api/sendMessageWithFile', {
   method: 'POST',
   headers: {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
   },
   body: JSON.stringify({
     message: 'Привет! Это тестовое сообщение.',
@@ -108,12 +129,16 @@ console.log(data);
 import requests
 
 url = 'http://localhost:3000/api/sendMessageWithFile'
+headers = {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer YOUR_JWT_TOKEN'
+}
 data = {
     'message': 'Привет! Это тестовое сообщение.',
     'emailHTML': '<html><body><h1>Заголовок</h1><p>Содержимое email</p></body></html>'
 }
 
-response = requests.post(url, json=data)
+response = requests.post(url, json=data, headers=headers)
 print(response.json())
 ```
 

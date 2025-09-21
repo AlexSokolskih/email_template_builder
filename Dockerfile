@@ -23,6 +23,7 @@ RUN npx prisma generate
 COPY package*.json ./
 COPY prisma ./prisma/
 COPY frontend ./frontend/
+COPY services ./services/
 
 # Скрипт для запуска с SSL
 COPY scripts/start-with-ssl.sh /app/start-with-ssl.sh
