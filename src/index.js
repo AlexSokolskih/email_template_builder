@@ -511,6 +511,10 @@ app.post('/api/sendMessageWithFile', authenticateToken, async (req, res) => {
       return res.status(500).json({ error: 'GEMINI_API_KEY не настроен' });
     }
 
+    console.log('🔥 HOT RELOAD: process.env.GEMINI_API_KEY:', process.env.GEMINI_API_KEY);
+
+    console.log('🔥 HOT RELOAD: req.user.userId:', req.user.userId);
+
     // Создаем экземпляр GeminiClient
     const gemini = new GeminiClient(process.env.GEMINI_API_KEY);
 
