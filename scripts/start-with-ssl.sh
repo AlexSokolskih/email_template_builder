@@ -27,6 +27,9 @@ fi
 export SSL_KEY_PATH=/app/ssl/private.key
 export SSL_CERT_PATH=/app/ssl/certificate.crt
 
+echo "⏳ Применяю миграции Prisma..."
+npx prisma migrate deploy
+
 echo "🚀 Запускаю сервер с HTTPS поддержкой..."
 echo "🌐 Сервер будет доступен по адресу: https://62.182.192.42:3001"
 
