@@ -17,6 +17,7 @@ services:
       - ./frontend:/app/frontend
       - ./uploads:/app/uploads
       - ./src:/app/src
+      - ./prisma:/app/prisma
     restart: unless-stopped
     user: "1001:1001"
     depends_on:
