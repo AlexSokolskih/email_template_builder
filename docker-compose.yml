@@ -10,9 +10,11 @@ services:
       - .env
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://postgres:password@postgres:5432/email_generator
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/email_generator?sslmode=require
       - SSL_KEY_PATH=/app/ssl/private.key
       - SSL_CERT_PATH=/app/ssl/certificate.crt
+    secrets:
+      - postgres_password
     volumes:
       - ./frontend:/app/frontend
       - ./uploads:/app/uploads
@@ -29,12 +31,28 @@ services:
     environment:
       - POSTGRES_DB=email_generator
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"  # Только локальный доступ
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./ssl/postgres.crt:/var/lib/postgresql/server.crt:ro
+      - ./ssl/postgres.key:/var/lib/postgresql/server.key:ro
     restart: unless-stopped
+    secrets:
+      - postgres_password
+    command: >
+      postgres
+      -c ssl=on
+      -c ssl_cert_file=/var/lib/postgresql/server.crt
+      -c ssl_key_file=/var/lib/postgresql/server.key
+      -c ssl_ciphers=HIGH:MEDIUM:+3DES:!aNULL
+      -c ssl_prefer_server_ciphers=on
+      -c log_statement=all
+      -c log_connections=on
+      -c log_disconnections=on
+      -c log_hostname=on
+      -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
@@ -44,17 +62,33 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
-      - PGADMIN_DEFAULT_PASSWORD=admin
-      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_DEFAULT_EMAIL_FILE=/run/secrets/pgadmin_email
+      - PGADMIN_DEFAULT_PASSWORD_FILE=/run/secrets/pgadmin_password
+      - PGADMIN_CONFIG_SERVER_MODE=True
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+      - PGADMIN_CONFIG_WTF_CSRF_ENABLED=True
+      - PGADMIN_CONFIG_SESSION_COOKIE_SECURE=True
+      - PGADMIN_CONFIG_SESSION_COOKIE_HTTPONLY=True
+      - PGADMIN_CONFIG_SESSION_COOKIE_SAMESITE=Strict
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"  # Только локальный доступ
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     depends_on:
       - postgres
     restart: unless-stopped
+    secrets:
+      - pgadmin_email
+      - pgadmin_password
 
 volumes:
   postgres_data:
   pgadmin_data:
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  pgadmin_email:
+    file: ./secrets/pgadmin_email.txt
+  pgadmin_password:
+    file: ./secrets/pgadmin_password.txt
