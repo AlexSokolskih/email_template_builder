@@ -36,23 +36,28 @@ services:
       - "127.0.0.1:5432:5432"  # Только локальный доступ
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./ssl/postgres.crt:/var/lib/postgresql/server.crt:ro
-      - ./ssl/postgres.key:/var/lib/postgresql/server.key:ro
+      - ./ssl:/ssl:ro
     restart: unless-stopped
     secrets:
       - postgres_password
     command: >
-      postgres
-      -c ssl=on
-      -c ssl_cert_file=/var/lib/postgresql/server.crt
-      -c ssl_key_file=/var/lib/postgresql/server.key
-      -c ssl_ciphers=HIGH:MEDIUM:+3DES:!aNULL
-      -c ssl_prefer_server_ciphers=on
-      -c log_statement=all
-      -c log_connections=on
-      -c log_disconnections=on
-      -c log_hostname=on
-      -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+      sh -c "
+      cp /ssl/postgres.crt /var/lib/postgresql/server.crt && \
+      cp /ssl/postgres.key /var/lib/postgresql/server.key && \
+      chown postgres:postgres /var/lib/postgresql/server.key /var/lib/postgresql/server.crt && \
+      chmod 600 /var/lib/postgresql/server.key && \
+      chmod 644 /var/lib/postgresql/server.crt && \
+      exec postgres \
+        -c ssl=on \
+        -c ssl_cert_file=/var/lib/postgresql/server.crt \
+        -c ssl_key_file=/var/lib/postgresql/server.key \
+        -c ssl_ciphers=HIGH:MEDIUM:+3DES:!aNULL \
+        -c ssl_prefer_server_ciphers=on \
+        -c log_connections=on \
+        -c log_disconnections=on \
+        -c log_hostname=on \
+        -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+      "
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
