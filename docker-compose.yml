@@ -10,7 +10,7 @@ services:
       - .env
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/email_generator
+      - DATABASE_URL=${DATABASE_URL}
       - SSL_KEY_PATH=/app/ssl/private.key
       - SSL_CERT_PATH=/app/ssl/certificate.crt
     volumes:
