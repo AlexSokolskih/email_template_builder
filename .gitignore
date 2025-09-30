@@ -102,7 +102,7 @@ Thumbs.db
 .dockerignore
 
 # Prisma
-prisma/migrations/
+# prisma/migrations/ - НЕ игнорируем миграции!
 
 # Uploads (если не нужно коммитить загруженные файлы)
 uploads/
