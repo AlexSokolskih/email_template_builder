@@ -317,11 +317,16 @@ app.get('/register/', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/register/index.html'));
 });
 
+// Базовая директория для загрузок (переопределяется через переменную окружения UPLOADS_DIR)
+const uploadsBaseDir = process.env.UPLOADS_DIR
+  ? path.resolve(process.env.UPLOADS_DIR)
+  : path.join(__dirname, '../uploads');
+
 // Настройка multer для загрузки файлов
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const userFolder = req.user?.userId || 'anonymous';
-    const uploadPath = path.join(__dirname, '../uploads', userFolder);
+    const uploadPath = path.join(uploadsBaseDir, userFolder);
     console.log('Upload path:', uploadPath);
     
     // Создаем папку если не существует
@@ -332,8 +337,19 @@ const storage = multer.diskStorage({
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    // Оставляем оригинальное имя файла
-    cb(null, file.originalname);
+    // Корректируем моджибейк из latin1 в utf8 для поддержки кириллицы
+    let safeName = file.originalname;
+    try {
+      // Если есть признаки моджибейка, перекодируем
+      if (/[ÃÐÅÆ]/.test(file.originalname)) {
+        safeName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      }
+      // Нормализуем юникод
+      if (typeof safeName.normalize === 'function') {
+        safeName = safeName.normalize('NFC');
+      }
+    } catch (_) {}
+    cb(null, safeName);
   }
 });
 
@@ -355,7 +371,7 @@ app.get('/api/assets/:folder/:filename', authenticateToken, (req, res) => {
       return res.status(403).json({ error: 'Доступ запрещен' });
     }
     
-    const filePath = path.join(__dirname, '../uploads', folder, filename);
+    const filePath = path.join(uploadsBaseDir, folder, filename);
     
     // Проверяем существование файла
     if (!fs.existsSync(filePath)) {
@@ -422,7 +438,7 @@ app.post('/api/upload', authenticateToken, (req, res) => {
       }
 
       const userFolder = req.user.userId; // Используем ID пользователя из токена
-      const uploadPath = path.join(__dirname, '../uploads', userFolder);
+      const uploadPath = path.join(uploadsBaseDir, userFolder);
       console.log('Upload path:', uploadPath);
 
       // Получаем список файлов в папке пользователя
@@ -442,13 +458,12 @@ app.post('/api/upload', authenticateToken, (req, res) => {
 
       console.log(`🔥 HOT RELOAD: Файл ${uploaded.originalname} загружен в папку ${userFolder}`);
 
-      res.json({ 
-        success: true, 
-        folder: userFolder,
-        uploadedFile: {
-          filename: uploaded.originalname,
-          path: uploaded.path
-        },
+      res.json({
+        success: true,
+        message: 'Файл успешно загружен',
+        filename: uploaded.filename,
+        userId: userFolder,
+        filePath: uploaded.path,
         files: files
       });
     } catch (error) {
@@ -462,7 +477,7 @@ app.post('/api/upload', authenticateToken, (req, res) => {
 app.get('/api/files', authenticateToken, (req, res) => {
   try {
     const userFolder = req.user.userId;
-    const uploadPath = path.join(__dirname, '../uploads', userFolder);
+    const uploadPath = path.join(uploadsBaseDir, userFolder);
     
     let files = [];
     if (fs.existsSync(uploadPath)) {

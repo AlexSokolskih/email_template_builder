@@ -6,6 +6,8 @@ http://localhost:3000
 https://localhost:3001
 ```
 
+**Примечание:** Сервер работает на порту 3000 (HTTP) и 3001 (HTTPS). В тестах использовался HTTP на порту 3000.
+
 ## Эндпоинт
 
 ### Получение файла для отображения
@@ -108,6 +110,29 @@ POST /api/auth/login
 
 #### Примеры использования
 
+**cURL (тестирование):**
+```bash
+# 1. Получение JWT токена
+TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "testuser@example.com", "password": "password123"}' \
+  | jq -r '.token')
+
+# 2. Загрузка файла
+curl -X POST http://localhost:3000/api/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@test-file.txt"
+
+# 3. Получение файла
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3000/api/assets/cmg5lmilg000hhm3odmdve843/test-file.txt
+
+# 4. Получение только заголовков (для проверки MIME-типа)
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:3000/api/assets/cmg5lmilg000hhm3odmdve843/test-image.png \
+  -I
+```
+
 **JavaScript (fetch с аутентификацией):**
 ```javascript
 // Получение изображения
@@ -145,17 +170,29 @@ fetch(`/api/assets/${userId}/readme.txt`, {
   });
 ```
 
-**cURL:**
+**cURL (дополнительные примеры):**
 ```bash
-# Получение изображения
+# Получение изображения с сохранением
 curl -H "Authorization: Bearer your-jwt-token" \
      -o logo.png \
      http://localhost:3000/api/assets/user-id/logo.png
 
-# Получение PDF
+# Получение PDF с сохранением
 curl -H "Authorization: Bearer your-jwt-token" \
      -o document.pdf \
      http://localhost:3000/api/assets/user-id/report.pdf
+
+# Тестирование ошибок
+curl -H "Authorization: Bearer invalid-token" \
+     http://localhost:3000/api/assets/user-id/file.txt
+# Ответ: {"error": "Недействительный токен"}
+
+curl http://localhost:3000/api/assets/user-id/file.txt
+# Ответ: {"error": "Токен доступа не предоставлен"}
+
+curl -H "Authorization: Bearer your-jwt-token" \
+     http://localhost:3000/api/assets/user-id/nonexistent.txt
+# Ответ: {"error": "Файл не найден"}
 ```
 
 **React компонент:**
@@ -340,10 +377,22 @@ uploads/
 8. **CORS**: Настроен для всех доменов, работает с любым фронтендом
 9. **Iframe**: Файлы можно встраивать в iframe благодаря настроенным заголовкам
 
+## Статус тестирования
+
+✅ **API полностью протестирован и работает согласно спецификации:**
+
+- **Аутентификация**: JWT токены работают корректно
+- **Загрузка файлов**: `POST /api/upload` принимает файлы и сохраняет в папку пользователя
+- **Получение файлов**: `GET /api/assets/:folder/:filename` возвращает файлы с правильными заголовками
+- **Обработка ошибок**: Все коды ошибок (401, 403, 404) работают корректно
+- **MIME-типы**: Автоматическое определение типа файла работает
+- **CORS**: Настроен для всех доменов
+- **Безопасность**: Изоляция пользователей и JWT аутентификация работают
+
 ## Возможные улучшения
 
 1. Добавить поддержку дополнительных MIME-типов
-2. Реализовать кеширование с ETag заголовками
+2. Реализовать кеширование с ETag заголовками (частично реализовано)
 3. Добавить роли и права доступа к файлам
 4. Реализовать сжатие изображений на лету
 5. Добавить поддержку WebP конвертации
@@ -351,3 +400,6 @@ uploads/
 7. Добавить логирование доступа к файлам
 8. Реализовать временные ссылки для файлов
 9. Добавить валидацию размера файлов при загрузке
+10. Добавить эндпоинт для получения списка файлов пользователя
+11. Реализовать удаление файлов
+12. Добавить поддержку папок внутри пользовательской директории
