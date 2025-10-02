@@ -15,7 +15,7 @@ services:
       - SSL_CERT_PATH=/app/ssl/certificate.crt
     volumes:
       - ./frontend:/app/frontend
-      - ./uploads:/app/uploads
+      - uploads_data:/app/uploads
       - ./src:/app/src
     restart: unless-stopped
     user: "1001:1001"
@@ -58,3 +58,4 @@ services:
 volumes:
   postgres_data:
   pgadmin_data:
+  uploads_data:
