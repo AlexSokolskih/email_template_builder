@@ -360,6 +360,28 @@ const upload = multer({
   }
 });
 
+// Настройка multer для временных файлов (для sendMessageWithFile)
+const tempStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const tempDir = path.join(__dirname, '../temp_uploads');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    cb(null, tempDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, `temp-${uniqueSuffix}-${file.originalname}`);
+  }
+});
+
+const tempUpload = multer({ 
+  storage: tempStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB лимит
+  }
+});
+
 
 // Эндпоинт для отображения файлов (не для скачивания)
 app.get('/api/assets/:folder/:filename', authenticateToken, (req, res) => {
@@ -503,10 +525,13 @@ app.get('/api/files', authenticateToken, (req, res) => {
 
 
 
-// Эндпоинт для отправки сообщения с HTML файлом в Gemini
-app.post('/api/sendMessageWithFile', authenticateToken, async (req, res) => {
+// Эндпоинт для отправки сообщения с HTML файлом в Gemini (с опциональной загрузкой файла)
+app.post('/api/sendMessageWithFile', authenticateToken, tempUpload.single('file'), async (req, res) => {
   console.log('🔥 HOT RELOAD: Пришел запрос на отправку сообщения с файлом');
   console.log('🔥 HOT RELOAD: Тело запроса:', req.body);  
+  console.log('🔥 HOT RELOAD: Загруженный файл:', req.file);
+
+  let tempFilePath = null;
 
   try {
     const { message, emailHTML } = req.body || {};
@@ -527,7 +552,6 @@ app.post('/api/sendMessageWithFile', authenticateToken, async (req, res) => {
     }
 
     console.log('🔥 HOT RELOAD: process.env.GEMINI_API_KEY:', process.env.GEMINI_API_KEY);
-
     console.log('🔥 HOT RELOAD: req.user.userId:', req.user.userId);
 
     // Создаем экземпляр GeminiClient
@@ -538,10 +562,19 @@ app.post('/api/sendMessageWithFile', authenticateToken, async (req, res) => {
 
     let result;
 
+    // Если есть загруженный файл, передаем его путь в   ???
+    if (req.file) {
+      tempFilePath = req.file.path;
+      console.log('🔥 HOT RELOAD: Отправляем сообщение с файлом в Gemini:', tempFilePath);
+      result = await gemini.sendMessageWithFile(combinedMessage, tempFilePath, {
+        userId: req.user.userId
+      });
+    } else {
       console.log('🔥 HOT RELOAD: Отправляем текстовое сообщение в Gemini');
       result = await gemini.sendMessage(combinedMessage, {
         userId: req.user.userId
       });
+    }
 
     if (result.success) {
       console.log('🔥 HOT RELOAD: Успешный ответ от Gemini');
@@ -567,6 +600,16 @@ app.post('/api/sendMessageWithFile', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Ошибка при отправке сообщения с файлом:', error);
     res.status(500).json({ success: false, error: 'Ошибка при отправке сообщения с файлом' });
+  } finally {
+    // Удаляем временный файл после обработки
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try {
+        fs.unlinkSync(tempFilePath);
+        console.log('🔥 HOT RELOAD: Временный файл удален:', tempFilePath);
+      } catch (deleteError) {
+        console.error('Ошибка при удалении временного файла:', deleteError);
+      }
+    }
   }
 });
 
