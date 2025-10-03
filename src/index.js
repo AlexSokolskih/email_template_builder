@@ -562,7 +562,7 @@ app.post('/api/sendMessageWithFile', authenticateToken, tempUpload.single('file'
 
     let result;
 
-    // Если есть загруженный файл, передаем его путь в   ???
+    // Если есть загруженный файл, передаем его путь в gemini
     if (req.file) {
       tempFilePath = req.file.path;
       console.log('🔥 HOT RELOAD: Отправляем сообщение с файлом в Gemini:', tempFilePath);
