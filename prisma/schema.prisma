@@ -29,8 +29,9 @@ model User {
   updatedAt DateTime @updatedAt
   
   // Связи
-  emails    Email[]
-  templates Template[]
+  emails         Email[]
+  templates      Template[]
+  geminiRequests GeminiRequest[]
 }
 
 model Template {
@@ -41,6 +42,24 @@ model Template {
   variables   Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  
+  // Связи
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model GeminiRequest {
+  id          String   @id @default(cuid())
+  request     String   // Исходный запрос пользователя
+  response    String?  // Ответ от Gemini
+  emailHtml   String?  // HTML код письма, если есть
+  model       String?  // Использованная модель
+  usage       Json?    // Информация об использовании токенов
+  success     Boolean  @default(false) // Успешность запроса
+  error       String?  // Текст ошибки, если есть
+  fileProcessed Boolean @default(false) // Обрабатывался ли файл
+  filesProcessed Int?   // Количество обработанных файлов
+  createdAt   DateTime @default(now())
   
   // Связи
   userId String?

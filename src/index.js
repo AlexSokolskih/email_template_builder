@@ -566,19 +566,69 @@ app.post('/api/sendMessageWithFile', authenticateToken, tempUpload.single('file'
     if (req.file) {
       tempFilePath = req.file.path;
       console.log('🔥 HOT RELOAD: Отправляем сообщение с файлом в Gemini:', tempFilePath);
-      result = await gemini.sendMessageWithFile(combinedMessage, tempFilePath, {
-        userId: req.user.userId
-      });
+      console.log('🔥 HOT RELOAD: Файл существует?', require('fs').existsSync(tempFilePath));
+      console.log('🔥 HOT RELOAD: Размер файла:', require('fs').statSync(tempFilePath).size);
+      
+      try {
+        result = await gemini.sendMessageWithFile(combinedMessage, tempFilePath, {
+          userId: req.user.userId
+        });
+        console.log('🔥 HOT RELOAD: Успешно получили результат от sendMessageWithFile');
+      } catch (error) {
+        console.log('🔥 HOT RELOAD: ОШИБКА в sendMessageWithFile:', error.message);
+        throw error;
+      }
     } else {
       console.log('🔥 HOT RELOAD: Отправляем текстовое сообщение в Gemini');
+      console.log('🔥 HOT RELOAD: Вызываем gemini.sendMessage с userId:', req.user.userId);
       result = await gemini.sendMessage(combinedMessage, {
         userId: req.user.userId
       });
+      console.log('🔥 HOT RELOAD: Получили результат от gemini.sendMessage');
     }
 
+    console.log('🔥 HOT RELOAD: Результат от Gemini:', result);
+    
+    // Принудительно сохраняем запрос в БД (включая ошибки)
+    try {
+      console.log('🔥 HOT RELOAD: Сохраняем запрос в БД принудительно...');
+      console.log('🔥 HOT RELOAD: prisma определен:', !!prisma);
+      console.log('🔥 HOT RELOAD: prisma.geminiRequest:', !!prisma?.geminiRequest);
+      console.log('🔥 HOT RELOAD: Данные для сохранения:', {
+        request: message?.substring(0, 100) + '...',
+        response: result.text?.substring(0, 100) + '...',
+        success: result.success,
+        error: result.error,
+        userEmail: req.user.email
+      });
+      
+      const savedRequest = await prisma.geminiRequest.create({
+        data: {
+          request: message,
+          response: result.text || null,
+          emailHtml: result.emailHtml || null,
+          model: result.model || null,
+          usage: result.usage || null,
+          success: result.success || false,
+          error: result.error || null,
+          fileProcessed: result.fileProcessed || false,
+          filesProcessed: result.filesProcessed || null,
+          userId: req.user.userId,
+          userEmail: req.user.email
+        }
+      });
+      console.log('🔥 HOT RELOAD: Запрос успешно сохранен в БД! ID:', savedRequest.id);
+    } catch (dbError) {
+      console.error('🔥 HOT RELOAD: Ошибка сохранения в БД:', dbError);
+      console.error('🔥 HOT RELOAD: Детали ошибки:', {
+        message: dbError.message,
+        code: dbError.code,
+        meta: dbError.meta
+      });
+    }
+    
     if (result.success) {
       console.log('🔥 HOT RELOAD: Успешный ответ от Gemini');
-      console.log('🔥 HOT RELOAD: Результат:', result);
       return res.json({
         success: true,
         message: result.text,
