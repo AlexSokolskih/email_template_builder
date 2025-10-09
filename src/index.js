@@ -613,8 +613,7 @@ app.post('/api/sendMessageWithFile', authenticateToken, tempUpload.single('file'
           error: result.error || null,
           fileProcessed: result.fileProcessed || false,
           filesProcessed: result.filesProcessed || null,
-          userId: req.user.userId,
-          userEmail: req.user.email
+          userId: req.user.userId
         }
       });
       console.log('🔥 HOT RELOAD: Запрос успешно сохранен в БД! ID:', savedRequest.id);
